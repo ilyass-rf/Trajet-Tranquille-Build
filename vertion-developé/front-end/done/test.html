@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trajet Tranquille — Oujda</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700;800&family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root {
+  --bg: #080C14; --surface: #0F1724; --surface-2: #172033;
+  --border: #1E2D42; --accent: #00D4AA; --accent-2: #FF6B35;
+  --text: #E4EBF5; --muted: #5A7A9A;
+  --success: #00D4AA; --warning: #FFB547; --danger: #FF4D4D;
+  --inactive: #3A4A5C;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Outfit',sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+header { display:flex; align-items:center; justify-content:space-between; padding:0 24px; height:56px; background:var(--surface); border-bottom:1px solid var(--border); flex-shrink:0; z-index:1000; }
+.logo { display:flex; align-items:center; gap:10px; }
+.logo-icon { width:32px; height:32px; background:var(--accent); border-radius:8px; display:flex; align-items:center; justify-content:center; }
+.logo-text { font-family:'Syne',sans-serif; font-size:17px; font-weight:700; letter-spacing:-0.3px; }
+.logo-text span { color:var(--accent); }
+.header-right { display:flex; align-items:center; gap:16px; }
+.live-pill { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+.live-dot { width:7px; height:7px; border-radius:50%; background:var(--success); animation:blink 2s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+.city-badge { font-size:12px; padding:3px 10px; border-radius:20px; background:var(--surface-2); border:1px solid var(--border); color:var(--muted); letter-spacing:.5px; }
+.main { display:flex; flex:1; overflow:hidden; }
+#map { flex:1; height:100%; z-index:1; position:relative; }
+.map-overlay { position:absolute; top:16px; left:16px; z-index:500; display:flex; flex-direction:column; gap:8px; }
+.stat-pill { background:rgba(8,12,20,.88); backdrop-filter:blur(8px); border:1px solid var(--border); border-radius:8px; padding:8px 14px; font-size:12px; color:var(--muted); display:flex; align-items:center; gap:8px; }
+.stat-pill strong { color:var(--text); font-family:'JetBrains Mono',monospace; }
+.sidebar { width:340px; flex-shrink:0; background:var(--surface); border-left:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; z-index:10; }
+.sb-head { padding:16px 20px 12px; border-bottom:1px solid var(--border); }
+.sb-title { font-family:'Syne',sans-serif; font-size:12px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:12px; }
+.search { display:flex; align-items:center; gap:8px; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:8px 12px; margin-bottom:12px; }
+.search svg { color:var(--muted); flex-shrink:0; }
+.search input { background:none; border:none; outline:none; color:var(--text); font-family:'Outfit',sans-serif; font-size:13px; width:100%; }
+.search input::placeholder { color:var(--muted); }
+.tabs { display:flex; gap:4px; overflow-x:auto; scrollbar-width:none; }
+.tabs::-webkit-scrollbar { display:none; }
+.tab { padding:5px 12px; border-radius:6px; font-size:12px; font-weight:500; cursor:pointer; white-space:nowrap; border:1px solid transparent; color:var(--muted); transition:all .15s; background:none; }
+.tab:hover { background:var(--surface-2); color:var(--text); }
+.tab.active { background:var(--accent); color:var(--bg); font-weight:600; border-color:var(--accent); }
+.error-banner { background:rgba(255,77,77,.1); border:1px solid rgba(255,77,77,.3); border-radius:8px; padding:10px 14px; font-size:12px; color:var(--danger); margin:8px 12px; display:none; }
+.error-banner.show { display:block; }
+.bus-list { flex:1; overflow-y:auto; padding:8px 12px; scrollbar-width:thin; scrollbar-color:var(--border) transparent; }
+.bus-list::-webkit-scrollbar { width:4px; }
+.bus-list::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+.bus-card { display:flex; align-items:center; gap:12px; padding:11px 12px; border-radius:10px; cursor:pointer; transition:all .15s; border:1px solid transparent; margin-bottom:6px; }
+.bus-card:hover { background:var(--surface-2); border-color:var(--border); }
+.bus-card.selected { background:var(--surface-2); border-color:var(--accent); }
+.bus-icon { width:36px; height:36px; border-radius:9px; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:15px; }
+.bus-icon.actif { background:rgba(0,212,170,.12); }
+.bus-icon.inactif { background:rgba(58,74,92,.3); }
+.bus-icon.en_panne { background:rgba(255,77,77,.12); }
+.bus-info { flex:1; min-width:0; }
+.bus-id { font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:500; margin-bottom:2px; }
+.bus-meta { font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.badge { font-size:10px; padding:2px 8px; border-radius:12px; font-weight:500; flex-shrink:0; }
+.badge.actif { background:rgba(0,212,170,.15); color:var(--success); }
+.badge.inactif { background:rgba(58,74,92,.3); color:var(--inactive); }
+.badge.en_panne { background:rgba(255,77,77,.15); color:var(--danger); }
+.loading { text-align:center; padding:40px 20px; color:var(--muted); font-size:13px; }
+.spinner { width:24px; height:24px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; margin:0 auto 12px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.no-data { text-align:center; padding:20px; color:var(--muted); font-size:12px; }
+.detail { border-top:1px solid var(--border); padding:16px 20px; background:var(--bg); display:none; }
+.detail.show { display:block; }
+.detail-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+.detail-title { font-family:'Syne',sans-serif; font-size:16px; font-weight:700; }
+.close-btn { width:28px; height:28px; border-radius:6px; background:var(--surface-2); border:1px solid var(--border); color:var(--muted); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:14px; transition:.15s; }
+.close-btn:hover { background:var(--border); color:var(--text); }
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; }
+.stat-box { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
+.stat-label { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }
+.stat-val { font-family:'JetBrains Mono',monospace; font-size:14px; font-weight:500; }
+.stat-val.a { color:var(--accent); }
+.stat-val.w { color:var(--warning); }
+.stat-val.o { color:var(--accent-2); }
+.eta-status { font-size:12px; color:var(--muted); margin-bottom:10px; padding:6px 10px; background:var(--surface); border-radius:6px; border:1px solid var(--border); }
+.btn-locate { width:100%; padding:10px; background:var(--accent); color:var(--bg); border:none; border-radius:8px; font-family:'Outfit',sans-serif; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; transition:opacity .15s; }
+.btn-locate:hover { opacity:.85; }
+.btn-locate:disabled { opacity:.4; cursor:not-allowed; }
+.leaflet-container { background:var(--bg) !important; }
+.leaflet-control-zoom { border:1px solid var(--border) !important; border-radius:8px !important; overflow:hidden; }
+.leaflet-control-zoom a { background:var(--surface) !important; color:var(--text) !important; border-color:var(--border) !important; }
+.leaflet-control-zoom a:hover { background:var(--surface-2) !important; }
+.leaflet-popup-content-wrapper { background:var(--surface); border:1px solid var(--border); border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,.6); color:var(--text); }
+.leaflet-popup-tip { background:var(--surface); }
+.leaflet-popup-content { font-family:'Outfit',sans-serif; font-size:13px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#080C14" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="1" y="3" width="15" height="13" rx="2"/>
+        <path d="M16 8h4l3 3v4h-7V8z"/>
+        <circle cx="5.5" cy="18.5" r="2.5"/>
+        <circle cx="18.5" cy="18.5" r="2.5"/>
+      </svg>
+    </div>
+    <div class="logo-text">Trajet <span>Tranquille</span></div>
+  </div>
+  <div class="header-right">
+    <div class="live-pill">
+      <div class="live-dot"></div>
+      <span>LIVE</span>
+      <span id="timer" style="opacity:.6">—</span>
+    </div>
+    <div class="city-badge">OUJDA · MA</div>
+  </div>
+</header>
+
+<div class="main">
+  <div id="map">
+    <div class="map-overlay">
+      <div class="stat-pill">🚌 <strong id="active-count">—</strong> bus actifs</div>
+      <div class="stat-pill" id="user-pill" style="display:none">📍 <strong>Vous êtes localisé</strong></div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sb-head">
+      <div class="sb-title">Flotte de bus</div>
+      <div class="search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" id="search-input" placeholder="Rechercher un bus...">
+      </div>
+      <div class="tabs">
+        <button class="tab active" data-filter="tous">Tous</button>
+        <button class="tab" data-filter="actif">Actifs</button>
+        <button class="tab" data-filter="Ligne 1">Ligne 1</button>
+        <button class="tab" data-filter="Ligne 2">Ligne 2</button>
+        <button class="tab" data-filter="Ligne 3">Ligne 3</button>
+      </div>
+    </div>
+
+    <div class="error-banner" id="error-banner">
+      ⚠️ Serveur injoignable — vérifiez que FastAPI est lancé sur le port 8000 ou via l'URL correcte.
+    </div>
+
+    <div class="bus-list" id="bus-list">
+      <div class="loading"><div class="spinner"></div>Chargement des bus...</div>
+    </div>
+
+    <div class="detail" id="detail">
+      <div class="detail-head">
+        <div class="detail-title" id="d-title">—</div>
+        <button class="close-btn" onclick="closeDetail()">✕</button>
+      </div>
+      <div class="grid2">
+        <div class="stat-box"><div class="stat-label">Latitude</div><div class="stat-val" id="d-lat">—</div></div>
+        <div class="stat-box"><div class="stat-label">Longitude</div><div class="stat-val" id="d-lon">—</div></div>
+        <div class="stat-box"><div class="stat-label">Vitesse</div><div class="stat-val a" id="d-speed">—</div></div>
+        <div class="stat-box"><div class="stat-label">Mis à jour</div><div class="stat-val" id="d-time">—</div></div>
+        <div class="stat-box"><div class="stat-label">Distance</div><div class="stat-val a" id="d-dist">—</div></div>
+        <div class="stat-box"><div class="stat-label">ETA</div><div class="stat-val w" id="d-eta">—</div></div>
+      </div>
+      <div class="eta-status" id="d-status" style="display:none"></div>
+      <button class="btn-locate" id="btn-locate" onclick="locateUser()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+        Calculer distance &amp; ETA
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+// configuration dyal api
+const API = 'https://elane-aesthetical-ngoc.ngrok-free.dev'; 
+//const API = 'http://127.0.0.1:8000';
+//const API = 'https://elane-aesthetical-ngoc.ngrok-free.dev/docs#/';
+//const API = 'http://127.0.0.1:5500'
+const REFRESH = 5;
+
+const NGROK_HEADERS = {
+    "ngrok-skip-browser-warning": "true"
+};
+
+const BUS_LIST = [
+    { id:'BUS_01', ligne:'Ligne 1' }, { id:'BUS_02', ligne:'Ligne 1' },
+    { id:'BUS_03', ligne:'Ligne 1' }, { id:'BUS_04', ligne:'Ligne 1' },
+    { id:'BUS_05', ligne:'Ligne 2' }, { id:'BUS_06', ligne:'Ligne 2' },
+    { id:'BUS_07', ligne:'Ligne 2' }, { id:'BUS_08', ligne:'Ligne 3' },
+    { id:'BUS_09', ligne:'Ligne 3' }, { id:'BUS_10', ligne:'Ligne 3' },
+];
+
+let busData = {}, markers = {}, selected = null, userPos = null;
+let filter = 'tous', search = '', countdown = REFRESH;
+let map, userMarker;
+
+// Configuration dyal lmap
+function initMap() {
+    map = L.map('map', { center:[34.6870,-1.9115],zoom:14 });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution:'© OpenStreetMap © CARTO', subdomains:'abcd', maxZoom:19
+    }).addTo(map);
+}
+
+function busIcon(active) {
+    const c = active ? '#00D4AA' : '#3A4A5C';
+    const bg = active ? 'rgba(0,212,170,.15)' : 'rgba(58,74,92,.25)';
+    const glow = active ? '0 0 14px rgba(0,212,170,.45)' : 'none';
+    return L.divIcon({
+        html:`<div style="width:36px;height:36px;border-radius:10px;background:${bg};border:2px solid ${c};display:flex;align-items:center;justify-content:center;font-size:15px;box-shadow:${glow}">🚌</div>`,
+        className:'', iconSize:[36,36], iconAnchor:[18,18]
+    });
+}
+
+// fetch configuration
+async function fetchAll() {
+    let active =0, hasError=false;
+    await Promise.allSettled(BUS_LIST.map(async b => {
+        try {
+            const r = await fetch(`${API}/get-bus/${b.id}`, { 
+            headers: NGROK_HEADERS, // AJOUTE POUR NGROK LI KHDAMA 
+            signal: AbortSignal.timeout(4000) 
+        });
+        if (r.ok) {
+            const d = await r.json();
+            busData[b.id] = { ...b, lat:d.lat, lon:d.lon, speed:d.speed_kmh, ts:d.timestamp, live:true, statut:'actif' };
+            active++;
+        } else {
+            busData[b.id] = { ...b, live:false, statut:'inactif' };
+        }
+        } catch(e) {
+            hasError = true;
+            busData[b.id] = { ...b, live:false, statut:'inactif' };
+        }
+    }));
+    document.getElementById('error-banner').classList.toggle('show', hasError && active ===0);
+    document.getElementById('active-count').textContent = active;
+    updateMarkers(); renderList();
+}
+
+// analise donné frent vers back
+async function fetchAnalysis(id) {
+    if (!userPos) return;
+    try {
+        const r = await fetch(`${API}/get-bus-analysis/${id}?user_lat=${userPos.lat}&user_lon=${userPos.lon}`, { //partax dyal les info mn frent l back end avac securité 'test'
+            headers: NGROK_HEADERS // AJOUTE POUR NGROK version li khdama 
+        });
+        if (r.ok) {
+        const d = await r.json();
+        const dist = d.distance_metres>=1000 ? (d.distance_metres/1000).toFixed(2)+' km' : d.distance_metres+' m';
+        document.getElementById('d-dist').textContent = dist;
+        document.getElementById('d-eta').textContent = d.temps_arrivee_minutes+' min';
+        const st = document.getElementById('d-status');
+        st.style.display = 'block';
+        st.textContent = '📍 Statut : ' + d.status;
+        }
+    } catch(e) {
+        console.error("Erreur analyse:", e);
+    }
+}
+
+// utilitaires et UI
+function updateMarkers() {
+    Object.values(busData).forEach(b => {
+        if (!b.live) { if (markers[b.id]) { map.removeLayer(markers[b.id]); delete markers[b.id]; } return; }
+        const icon = busIcon(true);
+        if (markers[b.id]) {
+            markers[b.id].setLatLng([b.lat, b.lon]).setIcon(icon);
+        } else {
+            markers[b.id] = L.marker([b.lat, b.lon], {icon}).addTo(map).on('click', () => selectBus(b.id));
+        }
+        markers[b.id].bindTooltip(`<strong>${b.id}</strong> · ${b.ligne}<br>${b.speed ? b.speed.toFixed(1)+' km/h' : 'Vitesse inconnue'}`, {direction:'top', offset:[0,-20]});
+    });
+}
+
+function renderList() {
+    const el = document.getElementById('bus-list');
+    const items = Object.values(busData).filter(b => {
+        const fOk = filter==='tous' || filter===b.statut || filter===b.ligne;
+        const sOk = b.id.toLowerCase().includes(search.toLowerCase());
+        return fOk && sOk;
+    });
+    if (!items.length) { el.innerHTML='<div class="no-data">Aucun bus trouvé</div>'; return; }
+    el.innerHTML = items.map(b => {
+        const lbl = {actif:'Actif',inactif:'Inactif',en_panne:'En panne'}[b.statut]||b.statut;
+        const meta = b.live ? (b.speed ? b.speed.toFixed(0)+' km/h' : 'GPS actif') : 'Hors ligne';
+        const ago = b.ts ? timeAgo(b.ts) : '';
+        return `<div class="bus-card${selected===b.id?' selected':''}" onclick="selectBus('${b.id}')">
+        <div class="bus-icon ${b.statut}">🚌</div>
+        <div class="bus-info">
+            <div class="bus-id">${b.id}</div>
+            <div class="bus-meta">${b.ligne} · ${meta}${ago?' · '+ago:''}</div>
+        </div>
+        <div class="badge ${b.statut}">${lbl}</div>
+        </div>`;
+    }).join('');
+}
+
+function selectBus(id) {
+    selected = id;
+    const b = busData[id]; if (!b) return;
+    if (b.live) map.flyTo([b.lat, b.lon], 16, {duration:.8});
+    document.getElementById('d-title').textContent = id + ' — ' + b.ligne;
+    document.getElementById('d-lat').textContent = b.lat ? b.lat.toFixed(5) : '—';
+    document.getElementById('d-lon').textContent = b.lon ? b.lon.toFixed(5) : '—';
+    document.getElementById('d-speed').textContent = b.speed ? b.speed.toFixed(1)+' km/h' : '—';
+    document.getElementById('d-time').textContent = b.ts ? timeAgo(b.ts) : '—';
+    document.getElementById('d-dist').textContent = '—';
+    document.getElementById('d-eta').textContent = '—';
+    document.getElementById('d-status').style.display = 'none';
+    document.getElementById('detail').classList.add('show');
+    if (userPos) fetchAnalysis(id);
+    renderList();
+}
+
+function closeDetail() {
+    selected = null;
+    document.getElementById('detail').classList.remove('show');
+    renderList();
+}
+
+function locateUser() {
+    const btn = document.getElementById('btn-locate');
+    btn.disabled = true; btn.textContent = 'Localisation...';
+    navigator.geolocation.getCurrentPosition(pos => {
+        userPos = { lat:pos.coords.latitude, lon:pos.coords.longitude };
+        if (userMarker) map.removeLayer(userMarker);
+        userMarker = L.marker([userPos.lat, userPos.lon], {
+            icon: L.divIcon({
+            html:'<div style="width:16px;height:16px;border-radius:50%;background:#FF6B35;border:3px solid white;box-shadow:0 0 10px rgba(255,107,53,.6)"></div>',
+            className:'', iconSize:[16,16], iconAnchor:[8,8]
+            })
+        }).addTo(map);
+        document.getElementById('user-pill').style.display = 'flex';
+        btn.disabled = false;
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg> Recalculer';
+        if (selected) fetchAnalysis(selected);
+    }, () => {
+        btn.disabled = false; btn.textContent = 'Localisation refusée';
+        setTimeout(() => { btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg> Calculer distance &amp; ETA'; }, 2000);
+    });
+}
+
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active'); filter = t.dataset.filter; renderList();
+}));
+
+document.getElementById('search-input').addEventListener('input', e => { search = e.target.value; renderList(); });
+
+function timeAgo(ts) {
+    const s = (Date.now() - new Date(ts).getTime()) / 1000;
+    if (s<60) return Math.round(s)+'s';
+    if (s<3600) return Math.round(s/60)+'min';
+    return Math.round(s/3600)+'h';
+}
+
+setInterval(() => {
+    countdown--;
+    document.getElementById('timer').textContent = '↻ '+countdown+'s';
+    if (countdown <=0) {
+        countdown = REFRESH;
+        fetchAll();
+        if (selected && userPos) fetchAnalysis(selected);
+    }
+}, 1000);
+
+//init 
+initMap();
+fetchAll();
+</script>
+</body>
+</html>

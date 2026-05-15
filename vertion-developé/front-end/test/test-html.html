@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trajet Tranquille - Suivi de Bus</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="style.css">
+</head>
+<style>
+    body { margin: 0; display: flex; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; height: 100vh; }
+    #sidebar { width: 300px; padding: 20px; background: #2c3e50; color: white; z-index: 1000; box-shadow: 2px 0 5px rgba(0,0,0,0.3); }
+    #map { flex-grow: 1; }
+    .card { background: #34495e; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+    h1 { font-size: 1.5rem; color: #3498db; }
+    #bus-status { font-weight: bold; color: #2ecc71; }
+</style>
+<body>
+    <div id="sidebar">
+        <h1>Trajet Tranquille</h1>
+        <div class="card">
+            <h3>Statut du Bus</h3>
+            <p id="bus-status">Recherche du bus...</p>
+            <div class="info-grid">
+                <div><strong>Distance:</strong> <span id="distance">-</span> m</div>
+                <div><strong>Arrivée:</strong> <span id="eta">-</span> min</div>
+            </div>
+        </div>
+        <div class="card">
+            <h3>Légende</h3>
+            <p>🔵 Vous êtes ici</p>
+            <p>🚌 Position du Bus</p>
+        </div>
+    </div>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="script.js"></script>
+</body>
+<script>
+    // --- CONFIGURATION ---
+const API_URL = "http://a1b2-c3d4.ngrok-free.app"; // REMPLACEZ PAR VOTRE URL NGROK/RAILWAY
+const BUS_ID = "BUS_01";
+const USER_COORDS = { lat: 34.6900, lon: -1.9000 }; // Coordonnées de l'utilisateur (Gare Oujda)
+
+// Initialisation de la carte
+const map = L.map('map').setView([USER_COORDS.lat, USER_COORDS.lon], 14);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+// Marqueurs
+const userMarker = L.marker([USER_COORDS.lat, USER_COORDS.lon]).addTo(map).bindPopup("Vous");
+const busMarker = L.marker([0, 0]).addTo(map);
+
+async function updateBusUI() {
+    try {
+        // 1. Appel à la route d'analyse que vous avez créée
+        const response = await fetch(`${API_URL}/get-bus-analysis/${BUS_ID}?user_lat=${USER_COORDS.lat}&user_lon=${USER_COORDS.lon}`);
+        const data = await response.json();
+
+        // 2. Appel à la route de position brute pour déplacer le marqueur sur la carte
+        const posResponse = await fetch(`${API_URL}/get-bus/${BUS_ID}`);
+        const posData = await posResponse.json();
+
+        // Mise à jour de la carte
+        busMarker.setLatLng([posData.lat, posData.lon]).bindPopup(`Bus: ${data.status}`);
+        
+        // Mise à jour de l'interface texte
+        document.getElementById('bus-status').innerText = data.status;
+        document.getElementById('distance').innerText = data.distance_metres;
+        document.getElementById('eta').innerText = data.temps_arrivee_minutes;
+
+    } catch (error) {
+        console.error("Erreur de connexion au serveur:", error);
+    }
+}
+
+// Rafraîchir toutes les 5 secondes
+setInterval(updateBusUI, 5000);
+updateBusUI();
+</script>
+</html>
